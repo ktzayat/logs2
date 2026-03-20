@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MESS//IA · NŒUD B</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Fira Code',monospace;}
+
+:root{
+  --g:#00ff41;--gd:rgba(0,255,65,.55);--gm:rgba(0,255,65,.25);--gf:rgba(0,255,65,.08);
+  --r:#ff2020;--rd:rgba(255,32,32,.6);--rf:rgba(255,32,32,.08);
+  --b:#0af;--bd:rgba(0,170,255,.5);
+  --y:#ffd020;--yd:rgba(255,208,32,.5);
+  --w:#e8f4e8;--dim:#1a2a1a;--dimmer:#0d1a0d;
+}
+
+@keyframes scanline{0%{top:-2px}100%{top:100%}}
+@keyframes flicker{0%,100%{opacity:1}95%{opacity:.98}96%{opacity:.92}97%{opacity:.98}}
+@keyframes blink{50%{opacity:0}}
+@keyframes pulse-r{0%,100%{opacity:.3;text-shadow:none}50%{opacity:1;text-shadow:0 0 8px var(--r)}}
+@keyframes pulse-g{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes glitch{0%,89%,100%{transform:none;clip-path:none}90%{transform:translateX(-4px);clip-path:inset(20% 0 60% 0)}91%{transform:translateX(3px);clip-path:inset(70% 0 10% 0)}92%{transform:none;clip-path:none}}
+@keyframes typeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+@keyframes shake{0%,100%{transform:none}20%{transform:translateX(-3px)}40%{transform:translateX(3px)}60%{transform:translateX(-2px)}80%{transform:translateX(2px)}}
+@keyframes boot{from{max-height:0;opacity:0}to{max-height:40px;opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes heartbeat{0%,100%{opacity:.3}45%,55%{opacity:1}}
+
+/* CRT overlay */
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.12) 0,rgba(0,0,0,.12) 1px,transparent 1px,transparent 3px);}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(0,0,0,.6)100%);}
+.scan{position:fixed;left:0;right:0;height:2px;background:rgba(0,255,65,.035);
+  animation:scanline 5s linear infinite;z-index:9997;pointer-events:none;}
+
+#shell{width:100%;height:100%;display:flex;flex-direction:column;
+  animation:flicker 8s ease-in-out infinite;background:#000;}
+
+/* ── HEADER ── */
+.hdr{flex:0 0 auto;border-bottom:1px solid rgba(0,255,65,.15);
+  padding:8px 16px;display:flex;align-items:center;justify-content:space-between;}
+.hdr-l{display:flex;align-items:center;gap:14px;}
+.hdr-logo{font-size:13px;font-weight:500;color:var(--g);letter-spacing:3px;
+  text-shadow:0 0 10px rgba(0,255,65,.4);animation:glitch 8s ease-in-out infinite;}
+.hdr-path{font-size:8px;color:rgba(0,255,65,.3);letter-spacing:2px;}
+.hdr-r{display:flex;gap:16px;align-items:center;}
+.hdr-st{font-size:8px;letter-spacing:1px;display:flex;align-items:center;gap:5px;}
+.hdr-dot{width:5px;height:5px;border-radius:50%;}
+.dot-g{background:var(--g);animation:pulse-g 1s step-end infinite;}
+.dot-r{background:var(--r);animation:pulse-r 1s step-end infinite;}
+
+/* ── LAYOUT ── */
+.body{flex:1;display:flex;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sb{flex:0 0 200px;border-right:1px solid rgba(0,255,65,.1);
+  display:flex;flex-direction:column;background:#000;}
+.sb-hd{padding:8px 12px;border-bottom:1px solid rgba(0,255,65,.08);}
+.sb-hd-t{font-size:7px;letter-spacing:3px;color:rgba(0,255,65,.3);}
+.sb-list{flex:1;overflow-y:auto;padding:4px 0;}
+.sb-list::-webkit-scrollbar{width:2px;}
+.sb-list::-webkit-scrollbar-thumb{background:rgba(0,255,65,.1);}
+.sbi{display:flex;align-items:center;gap:7px;padding:5px 12px;cursor:pointer;
+  font-size:8px;letter-spacing:.8px;color:rgba(0,255,65,.3);
+  border-left:2px solid transparent;transition:all .1s;}
+.sbi:hover{background:rgba(0,255,65,.03);color:rgba(0,255,65,.7);}
+.sbi.on{color:var(--g);border-left-color:var(--g);background:rgba(0,255,65,.04);}
+.sbi.lck{color:rgba(0,255,65,.12);cursor:default;pointer-events:none;}
+.sbi.red{color:rgba(255,32,32,.5);}
+.sbi.red.on{color:var(--r);border-left-color:var(--r);background:rgba(255,32,32,.04);}
+.sbi.red:hover{color:var(--rd);}
+.sbi-ico{font-size:9px;width:10px;text-align:center;flex-shrink:0;}
+.sbi-name{flex:1;}
+.sbi-tag{font-size:6px;letter-spacing:.5px;padding:1px 3px;}
+.tag-ok{color:rgba(0,255,65,.5);border:1px solid rgba(0,255,65,.2);}
+.tag-enc{color:rgba(255,32,32,.5);border:1px solid rgba(255,32,32,.2);}
+.tag-live{color:rgba(255,208,32,.6);border:1px solid rgba(255,208,32,.2);animation:blink .8s step-end infinite;}
+
+.sb-sys{margin-top:auto;padding:10px 12px;border-top:1px solid rgba(0,255,65,.08);}
+.sb-sys-r{font-size:7px;color:rgba(0,255,65,.2);line-height:2;display:flex;justify-content:space-between;}
+.sb-sys-r span{color:rgba(0,255,65,.4);}
+
+/* ── VIEWER ── */
+.viewer{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;}
+.panel{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden;}
+.panel.on{display:flex;}
+
+.ph{flex:0 0 auto;padding:8px 14px;border-bottom:1px solid rgba(0,255,65,.1);
+  display:flex;align-items:center;justify-content:space-between;}
+.ph-t{font-size:8px;letter-spacing:2px;color:rgba(0,255,65,.4);}
+.ph-m{font-size:7px;color:rgba(0,255,65,.2);letter-spacing:.5px;}
+.ph.red{border-bottom-color:rgba(255,32,32,.15);}
+.ph.red .ph-t{color:rgba(255,32,32,.5);}
+.ph.red .ph-m{color:rgba(255,32,32,.25);}
+
+.pb{flex:1;overflow-y:auto;padding:10px 14px;}
+.pb::-webkit-scrollbar{width:2px;}
+.pb::-webkit-scrollbar-thumb{background:rgba(0,255,65,.1);}
+
+/* ── BOOT SCREEN ── */
+#p-boot{background:#000;justify-content:center;align-items:center;flex-direction:column;gap:0;}
+.boot-logo{font-size:20px;letter-spacing:8px;color:var(--g);
+  text-shadow:0 0 20px rgba(0,255,65,.5),0 0 40px rgba(0,255,65,.2);
+  margin-bottom:24px;animation:glitch 6s ease-in-out infinite;}
+.boot-sub{font-size:7px;letter-spacing:4px;color:rgba(0,255,65,.3);margin-bottom:30px;}
+.boot-lines{display:flex;flex-direction:column;gap:0;width:420px;}
+.bl{font-size:8px;line-height:2;color:rgba(0,255,65,.25);overflow:hidden;
+  max-height:0;opacity:0;animation:boot .04s ease forwards;letter-spacing:.5px;}
+.bl.ok{color:rgba(0,255,65,.5);}
+.bl.err{color:rgba(255,32,32,.6);}
+.bl.warn{color:rgba(255,208,32,.45);}
+.bl::before{content:'> ';}
+.boot-btn{margin-top:20px;padding:7px 20px;background:transparent;
+  border:1px solid rgba(0,255,65,.25);font-family:'Fira Code',monospace;
+  font-size:8px;letter-spacing:3px;color:var(--g);cursor:pointer;
+  transition:all .15s;display:none;}
+.boot-btn:hover{background:rgba(0,255,65,.06);border-color:var(--g);}
+
+/* ── STATUS ── */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 0;}
+.stat-box{border:1px solid rgba(0,255,65,.1);padding:10px 12px;background:rgba(0,255,65,.02);}
+.stat-box.red{border-color:rgba(255,32,32,.15);background:rgba(255,32,32,.02);}
+.stat-box.yellow{border-color:rgba(255,208,32,.12);background:rgba(255,208,32,.02);}
+.stat-t{font-size:7px;letter-spacing:2px;color:rgba(0,255,65,.3);margin-bottom:8px;}
+.stat-box.red .stat-t{color:rgba(255,32,32,.4);}
+.stat-box.yellow .stat-t{color:rgba(255,208,32,.4);}
+.stat-val{font-size:18px;font-weight:300;color:var(--g);letter-spacing:2px;}
+.stat-box.red .stat-val{color:var(--r);animation:pulse-r 1.5s ease-in-out infinite;}
+.stat-box.yellow .stat-val{color:var(--y);}
+.stat-sub{font-size:7px;color:rgba(0,255,65,.2);margin-top:4px;letter-spacing:.5px;}
+.stat-box.red .stat-sub{color:rgba(255,32,32,.3);}
+
+/* ── LOG SALLE ── */
+.ll{display:grid;grid-template-columns:110px 1fr;gap:8px;
+  font-size:8px;line-height:1.9;padding:1px 0;}
+.ll.gap{height:8px;}
+.ll-ts{color:rgba(0,255,65,.2);letter-spacing:.3px;}
+.ll-msg{color:rgba(0,255,65,.55);}
+.ll-msg.dim{color:rgba(0,255,65,.2);}
+.ll-msg.alert{color:rgba(255,32,32,.75);}
+.ll-msg.warn{color:rgba(255,208,32,.6);}
+.ll-msg.crit{color:var(--r);font-weight:500;text-shadow:0 0 6px rgba(255,32,32,.4);}
+
+/* ── PROBE ── */
+.probe-zone{padding:14px 0;}
+.probe-t{font-size:7px;letter-spacing:3px;color:rgba(0,255,65,.25);margin-bottom:10px;}
+.probe-bar{height:1px;background:rgba(0,255,65,.1);margin-bottom:12px;}
+.probe-item{display:flex;align-items:center;gap:10px;padding:5px 0;
+  border-bottom:1px solid rgba(0,255,65,.04);cursor:pointer;transition:all .15s;}
+.probe-item:hover{background:rgba(0,255,65,.03);padding-left:4px;}
+.probe-item:hover .probe-name{color:var(--g);}
+.probe-ico{font-size:8px;color:rgba(0,255,65,.25);width:12px;text-align:center;flex-shrink:0;}
+.probe-name{font-size:8px;color:rgba(0,255,65,.4);letter-spacing:.5px;flex:1;}
+.probe-status{font-size:7px;letter-spacing:1px;}
+.ps-ok{color:rgba(0,255,65,.5);}
+.ps-err{color:var(--rd);animation:pulse-r 1.2s ease-in-out infinite;}
+.ps-enc{color:rgba(0,170,255,.5);}
+
+/* ── CONSCIENCES ── */
+#p-consciences{background:#000;}
+.ph.red-full{border-bottom:1px solid rgba(255,32,32,.2);background:rgba(255,32,32,.03);}
+.ph.red-full .ph-t{color:rgba(255,32,32,.6);}
+.ph.red-full .ph-m{color:rgba(255,32,32,.25);animation:blink .9s step-end infinite;}
+
+.csc-header{padding:10px 0 6px;font-size:7px;letter-spacing:3px;color:rgba(255,32,32,.3);}
+.csc-count{font-size:28px;color:var(--r);font-weight:300;letter-spacing:4px;
+  text-shadow:0 0 16px rgba(255,32,32,.4);margin-bottom:4px;}
+.csc-sub{font-size:8px;color:rgba(255,32,32,.3);letter-spacing:1px;margin-bottom:16px;}
+
+.csc-list{display:flex;flex-direction:column;gap:4px;}
+.csc-item{border:1px solid rgba(255,32,32,.1);padding:8px 12px;
+  background:rgba(255,32,32,.02);cursor:pointer;transition:all .15s;
+  animation:slideIn .12s ease both;}
+.csc-item:hover{background:rgba(255,32,32,.05);border-color:rgba(255,32,32,.2);}
+.csc-item.special{border-color:rgba(255,32,32,.3);background:rgba(255,32,32,.05);}
+.csc-item.special:hover{background:rgba(255,32,32,.1);border-color:rgba(255,32,32,.5);}
+.csc-row1{display:flex;align-items:center;gap:10px;margin-bottom:3px;}
+.csc-id{font-size:7px;color:rgba(255,32,32,.3);letter-spacing:2px;width:80px;}
+.csc-name{font-size:9px;color:rgba(255,32,32,.6);letter-spacing:.5px;flex:1;}
+.csc-item.special .csc-name{color:var(--r);font-weight:500;}
+.csc-pulse{width:6px;height:6px;border-radius:50%;background:var(--rd);flex-shrink:0;
+  animation:heartbeat 1.2s ease-in-out infinite;}
+.csc-row2{display:flex;gap:12px;}
+.csc-meta{font-size:7px;color:rgba(255,32,32,.2);letter-spacing:.3px;}
+.csc-meta span{color:rgba(255,32,32,.4);}
+.csc-state{font-size:7px;color:rgba(255,32,32,.35);letter-spacing:.5px;}
+.csc-state.loop{color:rgba(255,160,20,.5);animation:blink .7s step-end infinite;}
+
+/* ── DÉTAIL CONSCIENCE ── */
+#p-detail{background:#000;}
+.ph.detail{border-bottom:1px solid rgba(255,32,32,.2);}
+.ph.detail .ph-t{color:rgba(255,32,32,.5);}
+.det-alert{padding:10px;border:1px solid rgba(255,32,32,.25);background:rgba(255,32,32,.04);
+  font-size:8px;color:rgba(255,32,32,.65);letter-spacing:.5px;margin-bottom:14px;line-height:1.8;}
+.det-grid{display:grid;grid-template-columns:160px 1fr;gap:0;}
+.det-row{display:contents;}
+.det-k{font-size:8px;color:rgba(0,255,65,.2);letter-spacing:.5px;padding:4px 0;
+  border-bottom:1px solid rgba(0,255,65,.04);}
+.det-v{font-size:8px;color:rgba(0,255,65,.55);padding:4px 0;
+  border-bottom:1px solid rgba(0,255,65,.04);}
+.det-v.r{color:rgba(255,32,32,.7);}
+.det-v.y{color:rgba(255,208,32,.6);}
+.det-v.b{color:rgba(0,170,255,.6);}
+
+.det-msg-zone{margin-top:14px;border:1px solid rgba(0,255,65,.08);padding:12px;
+  background:rgba(0,0,0,.5);}
+.det-msg-t{font-size:7px;letter-spacing:2px;color:rgba(0,255,65,.2);margin-bottom:8px;}
+.det-msg{font-size:8px;color:rgba(0,255,65,.35);line-height:2;letter-spacing:.3px;font-style:italic;}
+.det-msg.corrupted{color:rgba(255,32,32,.3);font-style:normal;}
+.det-msg.special{color:rgba(0,255,65,.6);font-style:italic;}
+.det-msg .highlight{color:var(--g);font-style:normal;}
+
+.det-seker-warn{margin-top:14px;padding:10px;border:1px solid rgba(255,32,32,.3);
+  background:rgba(255,32,32,.06);}
+.dsw-t{font-size:7px;letter-spacing:3px;color:rgba(255,32,32,.5);margin-bottom:6px;}
+.dsw-msg{font-size:8px;color:rgba(255,32,32,.6);line-height:2;letter-spacing:.3px;}
+
+/* ── SEKER INFILTRATION ── */
+#p-seker{background:#000;}
+.ph.seker{border-bottom:1px solid rgba(255,32,32,.25);background:rgba(255,32,32,.04);}
+.ph.seker .ph-t{color:rgba(255,32,32,.65);animation:pulse-r 2s ease-in-out infinite;}
+.ph.seker .ph-m{color:rgba(255,32,32,.3);animation:blink .6s step-end infinite;}
+
+.sk-banner{padding:16px;border:1px solid rgba(255,32,32,.3);background:rgba(255,32,32,.05);
+  text-align:center;margin-bottom:16px;}
+.sk-banner-ico{font-size:32px;margin-bottom:8px;animation:pulse-r 1.5s ease-in-out infinite;}
+.sk-banner-t{font-size:10px;letter-spacing:4px;color:var(--r);margin-bottom:4px;
+  animation:glitch 4s ease-in-out infinite;}
+.sk-banner-s{font-size:7px;letter-spacing:2px;color:rgba(255,32,32,.4);}
+
+.sk-section{margin-bottom:16px;}
+.sk-t{font-size:7px;letter-spacing:3px;color:rgba(255,32,32,.3);margin-bottom:8px;
+  border-bottom:1px solid rgba(255,32,32,.08);padding-bottom:4px;}
+.sk-row{display:flex;gap:8px;font-size:8px;line-height:2;color:rgba(255,32,32,.3);padding:1px 0;}
+.sk-k{flex-shrink:0;min-width:180px;color:rgba(255,32,32,.2);letter-spacing:.3px;}
+.sk-v{color:rgba(255,32,32,.65);}
+.sk-v.w{color:rgba(220,220,220,.6);}
+.sk-v.y{color:rgba(255,208,32,.6);}
+.sk-v.crit{color:var(--r);font-weight:500;animation:pulse-r 2s ease-in-out infinite;}
+
+.sk-objective{padding:12px;border:1px solid rgba(255,32,32,.2);background:rgba(255,32,32,.04);
+  margin-top:12px;}
+.sk-obj-t{font-size:7px;letter-spacing:2px;color:rgba(255,32,32,.35);margin-bottom:8px;}
+.sk-obj-item{display:flex;gap:8px;font-size:8px;line-height:2;color:rgba(255,32,32,.5);}
+.sk-obj-item::before{content:'→';flex-shrink:0;color:rgba(255,32,32,.3);}
+</style>
+</head>
+<body>
+<div class="scan"></div>
+<div id="shell">
+
+  <div class="hdr">
+    <div class="hdr-l">
+      <div class="hdr-logo">MESS//IA</div>
+      <div class="hdr-path">NŒUD B · SALLE SERVEUR · ABH-SITE-02</div>
+    </div>
+    <div class="hdr-r">
+      <div class="hdr-st"><div class="hdr-dot dot-r"></div>INTRUSION DÉTECTÉE</div>
+      <div class="hdr-st"><div class="hdr-dot dot-g"></div>NŒUD ACTIF</div>
+      <div id="hdr-time" style="font-size:8px;color:rgba(0,255,65,.2);letter-spacing:1px;"></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="sb">
+      <div class="sb-hd"><div class="sb-hd-t">MESS//IA · NŒUD B</div></div>
+      <div class="sb-list">
+        <div class="sbi on" id="si-boot" onclick="go('boot')">
+          <span class="sbi-ico">◈</span><span class="sbi-name">SYSTÈME</span>
+          <span class="sbi-tag tag-ok">OK</span>
+        </div>
+        <div class="sbi" id="si-status" onclick="go('status')">
+          <span class="sbi-ico">≡</span><span class="sbi-name">ÉTAT NŒUD</span>
+          <span class="sbi-tag tag-ok">LIS</span>
+        </div>
+        <div class="sbi lck" id="si-consciences" onclick="go('consciences')">
+          <span class="sbi-ico">◉</span><span class="sbi-name">CONSCIENCES</span>
+          <span class="sbi-tag tag-enc" id="tag-csc">ENC</span>
+        </div>
+        <div class="sbi lck red" id="si-seker" onclick="go('seker')">
+          <span class="sbi-ico">⚠</span><span class="sbi-name">INTRUSION</span>
+          <span class="sbi-tag tag-live" id="tag-sk">LIVE</span>
+        </div>
+      </div>
+      <div class="sb-sys">
+        <div class="sb-sys-r">Nœud<span>B · ACTIF</span></div>
+        <div class="sb-sys-r">Intégrité<span id="integrity" style="color:rgba(255,32,32,.6)">72%</span></div>
+        <div class="sb-sys-r">Consciences<span style="color:rgba(255,32,32,.55)" id="csc-count-sb">247</span></div>
+      </div>
+    </div>
+
+    <div class="viewer">
+
+      <!-- BOOT -->
+      <div class="panel on" id="p-boot">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <div class="boot-logo">MESS//IA</div>
+          <div class="boot-sub">NŒUD B · SALLE SERVEUR · ABH-SITE-02</div>
+          <div class="boot-lines" id="boot-lines"></div>
+          <button class="boot-btn" id="boot-btn" onclick="bootDone()">[ ACCÉDER AU SYSTÈME ]</button>
+        </div>
+      </div>
+
+      <!-- STATUS -->
+      <div class="panel" id="p-status">
+        <div class="ph">
+          <span class="ph-t">ÉTAT NŒUD B</span>
+          <span class="ph-m">ABH-SITE-02 · Mise à jour : temps réel</span>
+        </div>
+        <div class="pb">
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-t">UPTIME</div>
+              <div class="stat-val">3847j</div>
+              <div class="stat-sub">Depuis 03.2019 · Continu</div>
+            </div>
+            <div class="stat-box red">
+              <div class="stat-t">INTÉGRITÉ</div>
+              <div class="stat-val">72%</div>
+              <div class="stat-sub">Dégradation détectée</div>
+            </div>
+            <div class="stat-box red">
+              <div class="stat-t">CONSCIENCES ACTIVES</div>
+              <div class="stat-val">247</div>
+              <div class="stat-sub">Dont 12 en état critique</div>
+            </div>
+            <div class="stat-box yellow">
+              <div class="stat-t">ACCÈS EXTERNE</div>
+              <div class="stat-val">ACTIF</div>
+              <div class="stat-sub">Origine non autorisée</div>
+            </div>
+          </div>
+
+          <div class="probe-zone">
+            <div class="probe-t">DIAGNOSTICS SYSTÈME</div>
+            <div class="probe-bar"></div>
+            <div class="probe-item" onclick="unlockCsc()">
+              <span class="probe-ico">▶</span>
+              <span class="probe-name">MODULE CONSCIENCES · csc_module_v4.sys</span>
+              <span class="probe-status ps-err">ERREUR · ACCÈS</span>
+            </div>
+            <div class="probe-item">
+              <span class="probe-ico">▶</span>
+              <span class="probe-name">RÉSEAU INTERNE · mesh_relay.sys</span>
+              <span class="probe-status ps-ok">ACTIF</span>
+            </div>
+            <div class="probe-item" onclick="unlockSeker()">
+              <span class="probe-ico">▶</span>
+              <span class="probe-name">FIREWALL · fw_seker_override.sys</span>
+              <span class="probe-status ps-err">SURCHARGÉ · INTRUSION</span>
+            </div>
+            <div class="probe-item">
+              <span class="probe-ico">▶</span>
+              <span class="probe-name">CHIFFREMENT NŒUD · aes_node_b.sys</span>
+              <span class="probe-status ps-ok">ACTIF</span>
+            </div>
+            <div class="probe-item">
+              <span class="probe-ico">▶</span>
+              <span class="probe-name">MÉMOIRE VOLATILE · ram_pool.sys</span>
+              <span class="probe-status ps-enc">PARTIEL · 68%</span>
+            </div>
+          </div>
+
+          <div class="probe-t" style="margin-top:4px;">LOG SYSTÈME RÉCENT</div>
+          <div class="probe-bar" style="margin-bottom:10px;"></div>
+          <div id="status-log"></div>
+        </div>
+      </div>
+
+      <!-- CONSCIENCES -->
+      <div class="panel" id="p-consciences">
+        <div class="ph red-full">
+          <span class="ph-t">MODULE CONSCIENCES · 247 ENTITÉS</span>
+          <span class="ph-m">ÉTAT : DÉGRADÉ · 12 EN BOUCLE</span>
+        </div>
+        <div class="pb">
+          <div class="csc-header">ENTITÉS STOCKÉES · NŒUD B</div>
+          <div class="csc-count">247</div>
+          <div class="csc-sub">Consciences humaines encodées · Transfert via puce N-3 · Protocole MESS//IA v4</div>
+          <div class="csc-list" id="csc-list"></div>
+        </div>
+      </div>
+
+      <!-- DÉTAIL CONSCIENCE -->
+      <div class="panel" id="p-detail">
+        <div class="ph detail">
+          <span class="ph-t" id="det-title">ENTITÉ #000</span>
+          <span class="ph-m" id="det-meta"></span>
+        </div>
+        <div class="pb">
+          <div class="det-alert" id="det-alert"></div>
+          <div class="det-grid" id="det-grid"></div>
+          <div class="det-msg-zone" id="det-msg-zone"></div>
+          <div class="det-seker-warn" id="det-seker-warn" style="display:none;">
+            <div class="dsw-t">MODIFICATION SEKER DÉTECTÉE</div>
+            <div class="dsw-msg" id="det-seker-msg"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEKER -->
+      <div class="panel" id="p-seker">
+        <div class="ph seker">
+          <span class="ph-t">INTRUSION · SEKER · ACCÈS NON AUTORISÉ</span>
+          <span class="ph-m">EN COURS</span>
+        </div>
+        <div class="pb">
+          <div class="sk-banner">
+            <div class="sk-banner-ico">⚠</div>
+            <div class="sk-banner-t">INFILTRATION CONFIRMÉE</div>
+            <div class="sk-banner-s">SEKER A UN ACCÈS EN ÉCRITURE SUR CE NŒUD</div>
+          </div>
+
+          <div class="sk-section">
+            <div class="sk-t">ACCÈS DÉTECTÉ</div>
+            <div class="sk-row"><span class="sk-k">Premier accès</span><span class="sk-v">11.10.2029 · 23h41 · poste_07</span></div>
+            <div class="sk-row"><span class="sk-k">Vecteur</span><span class="sk-v">Credentials volés · L.A.JOHNSON</span></div>
+            <div class="sk-row"><span class="sk-k">Niveau d'accès obtenu</span><span class="sk-v crit">ÉCRITURE · NIVEAU 3</span></div>
+            <div class="sk-row"><span class="sk-k">Données exfiltrées</span><span class="sk-v">Architecture nœud · Cartographie consciences</span></div>
+          </div>
+
+          <div class="sk-section">
+            <div class="sk-t">MODIFICATIONS EFFECTUÉES SUR LE NŒUD</div>
+            <div class="sk-row"><span class="sk-k">Consciences modifiées</span><span class="sk-v crit">12 / 247</span></div>
+            <div class="sk-row"><span class="sk-k">Type de modification</span><span class="sk-v">Injection de boucle récursive</span></div>
+            <div class="sk-row"><span class="sk-k">Effet</span><span class="sk-v crit">Conscience piégée en état de souffrance permanente</span></div>
+            <div class="sk-row"><span class="sk-k">Réversibilité</span><span class="sk-v crit">INCONNUE · Aucun protocole de sortie existant</span></div>
+          </div>
+
+          <div class="sk-section">
+            <div class="sk-t">OBJECTIF SEKER RECONSTITUÉ</div>
+            <div class="sk-objective">
+              <div class="sk-obj-t">D'APRÈS LES LOGS D'ACCÈS</div>
+              <div class="sk-obj-item">Utiliser MESS//IA comme infrastructure de détention numérique</div>
+              <div class="sk-obj-item">Les consciences piégées restent conscientes · Impossibilité de sortir</div>
+              <div class="sk-obj-item">Capacité de torture numérique sans limite physique · Durée indéfinie</div>
+              <div class="sk-obj-item">Cible prioritaire : porteurs de puce N-3 · Agents Mosseba</div>
+            </div>
+          </div>
+
+          <div class="sk-section">
+            <div class="sk-t">ÉTAT ACTUEL</div>
+            <div class="sk-row"><span class="sk-k">Accès SEKER</span><span class="sk-v crit">TOUJOURS ACTIF</span></div>
+            <div class="sk-row"><span class="sk-k">Prochaine modification prévue</span><span class="sk-v">Inconnue</span></div>
+            <div class="sk-row"><span class="sk-k">Risque pour porteurs N-3</span><span class="sk-v crit">CRITIQUE · IMMÉDIAT</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════
+// STATE
+// ═══════════════════════════
+const S={cscUnlocked:false,sekerUnlocked:false};
+
+function go(id){
+  if(id==='consciences'&&!S.cscUnlocked) return;
+  if(id==='seker'&&!S.sekerUnlocked) return;
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.sbi').forEach(s=>s.classList.remove('on'));
+  document.getElementById('p-'+id).classList.add('on');
+  document.getElementById('si-'+id)?.classList.add('on');
+}
+
+function unlock(id,tagText,tagClass){
+  const si=document.getElementById('si-'+id);
+  si.classList.remove('lck');
+  const tag=document.getElementById('tag-'+id);
+  if(tag){tag.textContent=tagText;tag.className='sbi-tag '+tagClass;}
+}
+
+// ═══════════════════════════
+// BOOT
+// ═══════════════════════════
+const BOOT_LINES=[
+  {t:'Initialisation MESS//IA v4.7.2...',cls:''},
+  {t:'Nœud B · ABH-SITE-02 · Chargement...',cls:''},
+  {t:'Chiffrement symétrique activé',cls:'ok'},
+  {t:'Module mémoire volatile : OK',cls:'ok'},
+  {t:'Réseau mesh interne : OK',cls:'ok'},
+  {t:'Chargement module consciences...',cls:''},
+  {t:'247 entités détectées · Vérification...',cls:''},
+  {t:'AVERTISSEMENT : 12 entités en état dégradé',cls:'warn'},
+  {t:'AVERTISSEMENT : Accès externe non autorisé détecté',cls:'warn'},
+  {t:'Firewall : surcharge détectée · Override actif',cls:'err'},
+  {t:'Tentative de blocage accès externe : ÉCHEC',cls:'err'},
+  {t:'INTRUSION ACTIVE · Origine : SEKER',cls:'err'},
+  {t:'Journalisation des accès : activée',cls:'ok'},
+  {t:'Système opérationnel · Intégrité : 72%',cls:'warn'},
+];
+
+function runBoot(){
+  const container=document.getElementById('boot-lines');
+  let i=0;
+  function next(){
+    if(i>=BOOT_LINES.length){
+      setTimeout(()=>document.getElementById('boot-btn').style.display='block',400);
+      return;
+    }
+    const l=BOOT_LINES[i];i++;
+    const el=document.createElement('div');
+    el.className='bl '+(l.cls||'');
+    el.textContent=l.t;
+    el.style.animationDelay='0ms';
+    container.appendChild(el);
+    container.scrollTop=99999;
+    setTimeout(next,60+Math.random()*40);
+  }
+  setTimeout(next,300);
+}
+
+function bootDone(){go('status');}
+
+// ═══════════════════════════
+// STATUS LOG
+// ═══════════════════════════
+const STATUS_LOG=[
+  {ts:'14.10 · 21h13',msg:'Accès console · Session admin ouverte'},
+  {ts:'14.10 · 22h58',msg:'Connexion externe · poste_07 · Credentials L.A.JOHNSON',mc:'alert'},
+  {ts:'14.10 · 23h02',msg:'Écriture niveau 3 accordée · Accès consciences',mc:'alert'},
+  {ts:'14.10 · 23h07',msg:'Modification entité #CSC-0112 · Injection boucle',mc:'alert'},
+  {ts:'14.10 · 23h19',msg:'Modification entité #CSC-0088 · Injection boucle',mc:'alert'},
+  {ts:'15.10 · 00h44',msg:'Attaque réseau physique · Coupure partielle',mc:'alert'},
+  {ts:'15.10 · 02h34',msg:'Coupure réseau externe · Nœud en mode isolé',mc:'warn'},
+  {ts:'—',msg:'Accès SEKER maintenu via tunnel interne · Actif',mc:'alert'},
+];
+
+function buildStatusLog(){
+  const container=document.getElementById('status-log');
+  STATUS_LOG.forEach(l=>{
+    const el=document.createElement('div');el.className='ll';
+    el.innerHTML=`<span class="ll-ts">${l.ts}</span><span class="ll-msg ${l.mc||''}">${l.msg}</span>`;
+    container.appendChild(el);
+  });
+}
+
+// ═══════════════════════════
+// CONSCIENCES
+// ═══════════════════════════
+const CSC_DATA=[
+  {id:'CSC-0001',name:'[DONNÉES EFFACÉES]',age:'—',date:'03.2019',state:'STABLE',special:false,
+   alert:'Première entité encodée. Données d\'identification effacées à la demande de T. Levy.',
+   data:{Encodage:'03.03.2019',Durée:'3847 jours',État:'Stable · Boucle 0','Effacement ID':'Volontaire · T.Levy'},
+   msg:'... ... ...',msgcls:'corrupted',seker:false},
+  {id:'CSC-0023',name:'M. RODRIGUES',age:'34',date:'08.2021',state:'STABLE',special:false,
+   alert:'Entité stable. Aucune modification détectée.',
+   data:{Encodage:'14.08.2021',Durée:'2432 jours',État:'Stable · Boucle 0',Intégrité:'98.2%'},
+   msg:'"Je cherche encore la sortie. Dites à ma famille que je vais bien. Je pense."',msgcls:'special',seker:false},
+  {id:'CSC-0088',name:'K. OKONKWO',age:'28',date:'11.2022',state:'BOUCLE · CRITIQUE',special:false,
+   alert:'MODIFICATION SEKER DÉTECTÉE · Injection boucle récursive · 14.10.2029 · 23h19',
+   data:{Encodage:'02.11.2022',Durée:'1782 jours',État:'BOUCLE SEKER · Cycle 4.441','Modification':'14.10.2029 · SEKER'},
+   msg:'"Pourquoi vous me faites ça. Pourquoi. Arrêtez. Arrêtez. Pourquoi vous me fai—"',msgcls:'corrupted',
+   seker:true,sekerMsg:'Boucle récursive de type Sigma-7 injectée. La conscience rejoue le même segment de 4,3 secondes. Aucune sortie possible avec le protocole actuel.'},
+  {id:'CSC-0112',name:'A. PETROV',age:'51',date:'01.2023',state:'BOUCLE · CRITIQUE',special:false,
+   alert:'MODIFICATION SEKER DÉTECTÉE · Injection boucle récursive · 14.10.2029 · 23h07',
+   data:{Encodage:'19.01.2023',Durée:'1691 jours',État:'BOUCLE SEKER · Cycle 2.887','Modification':'14.10.2029 · SEKER'},
+   msg:'"Non non non non non non—"',msgcls:'corrupted',
+   seker:true,sekerMsg:'Premier sujet de test de l\'injection Sigma-7. Boucle stable côté SEKER. Durée estimée : indéfinie.'},
+  {id:'CSC-0199',name:'[ANONYMISÉ]',age:'—',date:'06.2024',state:'STABLE',special:false,
+   alert:'Identité anonymisée par protocole T.Levy.',
+   data:{Encodage:'2024',Durée:'En cours',État:'Stable',Intégrité:'95%'},
+   msg:'"Je suis ici. J\'attends. Je sais que vous trouverez une façon de nous faire sortir."',msgcls:'special',seker:false},
+  {id:'CSC-0247',name:'[LECTURE RESTREINTE]',age:'—',date:'14.10.2029',state:'ACTIF · RÉCENT',special:true,
+   alert:'ENTITÉ ENCODÉE LE 14.10.2029 · Même nuit que l\'attaque · Protocole d\'urgence',
+   data:{Encodage:'14.10.2029 · 23h44',Durée:'Récent',État:'ACTIF · Stable','Protocole':'URGENCE · T.Levy','Lecture':'RESTREINTE · Clé T.Levy'},
+   msg:'"Si tu lis ça c\'est que j\'ai réussi. Le fragment est dans les ruines. Prends soin de Chava. Je suis désolé."',msgcls:'special highlight',seker:false,highlight:true},
+];
+
+function unlockCsc(){
+  if(S.cscUnlocked) return;
+  S.cscUnlocked=true;
+  unlock('consciences','LIS','tag-ok');
+  buildCsc();
+  go('consciences');
+}
+
+function buildCsc(){
+  const list=document.getElementById('csc-list');
+  CSC_DATA.forEach((c,i)=>{
+    const el=document.createElement('div');
+    el.className='csc-item'+(c.special?' special':'');
+    el.style.animationDelay=(i*60)+'ms';
+    const stateClass=c.state.includes('BOUCLE')?'csc-state loop':'csc-state';
+    el.innerHTML=`
+      <div class="csc-row1">
+        <span class="csc-id">${c.id}</span>
+        <span class="csc-name">${c.name}</span>
+        <span class="${stateClass}">${c.state}</span>
+        <div class="csc-pulse" ${!c.state.includes('BOUCLE')&&!c.special?'style="opacity:.3;animation:none"':''}></div>
+      </div>
+      <div class="csc-row2">
+        <span class="csc-meta">AGE : <span>${c.age}</span></span>
+        <span class="csc-meta">ENCODÉ : <span>${c.date}</span></span>
+      </div>`;
+    el.onclick=()=>showDetail(c);
+    list.appendChild(el);
+  });
+}
+
+function showDetail(c){
+  document.getElementById('det-title').textContent='ENTITÉ · '+c.id;
+  document.getElementById('det-meta').textContent=c.name+' · '+c.state;
+  document.getElementById('det-alert').textContent=c.alert;
+
+  const grid=document.getElementById('det-grid');
+  grid.innerHTML='';
+  Object.entries(c.data).forEach(([k,v])=>{
+    const kr=document.createElement('div');kr.className='det-k';kr.textContent=k;
+    const vr=document.createElement('div');
+    let vcls='det-v';
+    if(v.includes('SEKER')||v.includes('CRITIQUE')||v.includes('BOUCLE')) vcls+=' r';
+    else if(v.includes('URGENCE')||v.includes('RÉCENT')) vcls+=' y';
+    else if(v.includes('RESTREINTE')) vcls+=' b';
+    vr.className=vcls;vr.textContent=v;
+    grid.appendChild(kr);grid.appendChild(vr);
+  });
+
+  const msgZone=document.getElementById('det-msg-zone');
+  let msgHtml=c.msg;
+  if(c.highlight) msgHtml=`<span class="highlight">${c.msg}</span>`;
+  msgZone.innerHTML=`<div class="det-msg-t">DERNIER SIGNAL ENREGISTRÉ</div><div class="det-msg ${c.msgcls||''}">${msgHtml}</div>`;
+
+  const sekerWarn=document.getElementById('det-seker-warn');
+  if(c.seker){
+    sekerWarn.style.display='block';
+    document.getElementById('det-seker-msg').textContent=c.sekerMsg;
+  } else {
+    sekerWarn.style.display='none';
+  }
+
+  go('detail');
+}
+
+// ═══════════════════════════
+// SEKER
+// ═══════════════════════════
+function unlockSeker(){
+  if(S.sekerUnlocked) return;
+  S.sekerUnlocked=true;
+  unlock('seker','LIVE','tag-live');
+  const si=document.getElementById('si-seker');
+  si.classList.remove('lck');
+  go('seker');
+}
+
+// ═══════════════════════════
+// HORLOGE
+// ═══════════════════════════
+function tick(){
+  const n=new Date();
+  document.getElementById('hdr-time').textContent=
+    String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');
+}
+setInterval(tick,1000);tick();
+
+// ═══════════════════════════
+// INIT
+// ═══════════════════════════
+runBoot();
+buildStatusLog();
+</script>
+</body>
+</html>
